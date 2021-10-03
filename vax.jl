@@ -22,7 +22,7 @@ age_dist = [5.98, 6.39, 6.56, 6.17, 6.59, 7.40,
             7.44, 6.62, 6.08, 6.41, 6.43, 6.38,
             5.77, 4.90, 4.24, 6.64]./100
 N = age_dist.*N_all
-# Contact matrix -- from Prem et al.
+# Contact matrix -- from Prem et al
 C_raw = XLSX.readxlsx("MUestimates_all_locations_2.xlsx")["New Zealand"][:]
 # this makes it balanced.
 C = [(C_raw[i,j] + (N[j]/N[i])*C_raw[j,i])/2 for i ∈ 1:16, j ∈ 1:16]
@@ -30,12 +30,21 @@ C = [(C_raw[i,j] + (N[j]/N[i])*C_raw[j,i])/2 for i ∈ 1:16, j ∈ 1:16]
 tE = 2.55
 # Infectious period
 tI = 5
+# Average hospital length of stay
+tH = 8
 # The relative infectiousness of subclinical individuals
 τ = 0.5
 # Proportion of infections causing clinical disease by age group
 pclin = [0.544, 0.555, 0.577, 0.5985, 0.6195, 0.6395, 0.6585,
          0.6770, 0.6950, 0.7118, 0.7273, 0.7418, 0.7553, 0.768,
          0.78, 0.8008]
+# Hospitalisation probability by age group (note I slightly inflate the first
+# entry to avoid 0/0) (the 2.26 factor is just from the latest paper)
+phosp = [1.0e-10, 0.0001, 0.0003, 0.0029, 0.0079, 0.0164, 0.0283, 0.0364,
+         0.0405, 0.0523, 0.0718, 0.0907, 0.1089, 0.13, 0.154, 0.178]*2.26
+# Hospitalisation probability by age group
+pdeath = [0, 0.00003, 0.00006, 0.0001, 0.0002, 0.0004, 0.0007, 0.001,
+          0.0014, 0.0027, 0.0049, 0.0093, 0.016, 0.0252, 0.0369, 0.0664]*2.26
 # Relative susceptibility by age group (compared to 60-64 year-olds)
 u = [0.462, 0.457, 0.445, 0.558, 0.795, 0.934, 0.974, 0.977,
      0.942, 0.931, 0.942, 0.965, 1.00, 0.977, 0.896, 0.856]
@@ -47,7 +56,7 @@ m = 1.0 .* age_dist
 Define a function to simulate an SEIR model.
 
 Note we store the state in a dictionary with keys (θ,v,i), where 
-   θ ∈ ["S", "E", "I", "A", "R", "Imm"] indexes compartments;
+   θ ∈ ["S", "E", "I", "A", "R", "Imm", "H", "F", "Disch"] indexes compartments;
    v ∈ [0, 1] indexes vax status; and
    i indexes ages.
 
@@ -56,8 +65,9 @@ This function returns a dict of states, indexed by day.
 
 function simulate_SEIR(;
     num_days = 730, # Number of days to simulate.
-    eT = 0.5, # The efficacy of the vaccine against transmission.
     eI = 0.7, # The efficacy of the vaccine against infection.
+    eT = 0.5, # The efficacy of the vaccine against transmission.
+    eD = 0.8, # The efficacy of the vaccine against severe disease.
     R0 = 6.0*(1-0.17)*(1-0.20), # The basic reproduction number.
     v = [[0., 0., 0.9*(3/5)]; 0.9*ones(13)] # The vaccination rate for each age
                                             # group.
@@ -89,6 +99,13 @@ function simulate_SEIR(;
     dA(v,i,state) =  (1-pclin[i])*state[("E",v,i)]/tE - state[("A",v,i)]/tI
         # recovered
     dR(v,i,state) = (state[("I",v,i)] + state[("A",v,i)])/tI
+        # hospitalised
+    dH(v,i,state) = (phosp[i]/tE)*state[("E",v,i)]*((1-eD)^v) - state[("H",v,i)]/tH
+        # deaths
+    dF(v,i,state) = (pdeath[i]/phosp[i])*state[("H",v,i)]/tH
+        # discharge
+    dDisch(v,i,state) = (1 - (pdeath[i]/phosp[i]))*state[("H",v,i)]/tH
+
 
     # This function iterates the differential equations.
     function update(state)
@@ -102,6 +119,9 @@ function simulate_SEIR(;
                 new_state[("I",v,i)] = state[("I",v,i)] + dI(v,i,state)
                 new_state[("A",v,i)] = state[("A",v,i)] + dA(v,i,state)
                 new_state[("R",v,i)] = state[("R",v,i)] + dR(v,i,state)
+                new_state[("H",v,i)] = state[("H",v,i)] + dH(v,i,state)
+                new_state[("F",v,i)] = state[("F",v,i)] + dF(v,i,state)
+                new_state[("Disch",v,i)] = state[("Disch",v,i)] + dDisch(v,i,state)
             end
          end
          return new_state
@@ -115,6 +135,9 @@ function simulate_SEIR(;
             state_initial[("I",v,i)] = 0
             state_initial[("A",v,i)] = 0
             state_initial[("R",v,i)] = 0
+            state_initial[("H",v,i)] = 0
+            state_initial[("F",v,i)] = 0
+            state_initial[("Disch",v,i)] = 0
         end
      end
     for i ∈ 1:16
@@ -144,10 +167,41 @@ states = simulate_SEIR()
 # Count infections + recovered after one year in all groups.
 total_infections = sum([states[365][("R",v,i)] + states[365][("I",v,i)]
                         for v ∈ 0:1, i ∈ 1:16])
+# Count deaths.
+total_deaths = sum([states[365][("F",v,i)] for v ∈ 0:1, i ∈ 1:16])
+
 # Compare to
 #    Table "Baseline public health measures and full TTIQ"
 #       in the more recent paper.
-#    Infections, Cent VE, 90% vaxed over 12
-println("Total infections were $(round(total_infections; digits=0))")
+#    Cent VE, 90% vaxed over 12
+println("Total infections were $(round(total_infections; digits=1))")
 println("They should be 461893.")
+println("Total deaths were $(round(total_deaths; digits=1))")
+println("They should be 1557.")
+
+# Check that in each state, the number of people across all possibilities add
+# to the total pop -- excluding H, D, Disch, which double count people in other
+# categories.
+function total_pop(state)
+    groups = collect(keys(state))
+    groups_no_double_count = groups[[g[1] ∉ ["H", "F", "Disch"] for g in groups]]
+    states_no_double_count = [state[g] for g in groups_no_double_count]
+    return sum(states_no_double_count)
+end
+@assert all([total_pop(s) for s in values(states)] .≈ N_all)
+
+# Calculate death probability, by vaxed and unvaxed status.
+# Note it's probably worth splitting out children.
+vaxed_pop       = sum([states[1][(c,1,i)]   for c ∈ ["S", "Imm"], i ∈ 1:16])
+unvaxed_pop     = sum([states[1][("S",0,i)] for i ∈ 1:16])
+vaxed_deaths    = sum([states[365][("F",1,i)] for i ∈ 1:16])
+unvaxed_deaths  = sum([states[365][("F",0,i)] for i ∈ 1:16])
+death_prob = (vaxed_deaths + unvaxed_deaths)/(vaxed_pop + unvaxed_pop)
+vaxed_death_prob   = vaxed_deaths/vaxed_pop
+unvaxed_death_prob = unvaxed_deaths/unvaxed_pop
+println("P[death] = $(round(death_prob; digits=7))")
+println("P[death | vax] = $(round(vaxed_death_prob; digits=7))")
+println("P[death | unvax] = $(round(unvaxed_death_prob; digits=7))")
+
+
 
