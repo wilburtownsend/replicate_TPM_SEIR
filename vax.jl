@@ -64,6 +64,36 @@ Note we store the state in a dictionary with keys (θ,v,i), where
 This function returns a dict of states, indexed by day.
 ==============================================================================#
 
+
+"""Runs a bisection search to find the value of `x` that would make `f(x)`
+within `tol` of `target`, using `lower` and `upper` as initial search
+boundaries. Shows a warning if the result is either `lower` or `upper`.
+(`f` is assumed to be increasing; behaviour is undefined if it's not.)
+"""
+function bisection_search(f, target, lower, upper, tol=1e-7)
+    if target > f(upper)
+        @warn "bisection_search: target > f(upper), returning upper"
+        return upper
+    elseif target < f(lower)
+        @warn "bisection_search: target < f(lower), returning lower"
+        return lower
+    end
+
+    x = (lower + upper) / 2
+    while abs(f(x) - target) > tol
+        value = f(x)
+        if target < value
+            upper = x
+        else
+            lower = x
+        end
+        x = (lower + upper) / 2
+    end
+
+    return x
+end
+
+
 function simulate_SEIR(;
     num_days = 730, # Number of days to simulate.
     eI = 0.7, # The efficacy of the vaccine against infection.
@@ -77,11 +107,9 @@ function simulate_SEIR(;
     # Form the next generation matrix. This is only used to find U, given some R0,
     # so we condition on it on U.
     NGM(U) = [U*u[i]*tI*C[j,i]*(pclin[j] + τ*(1-pclin[j])) for i=1:16, j=1:16] 
-    # We set U to match the basic reproduction number (searching over a
-    # log-equidistant space).
+    # We set U to match the basic reproduction number (within a tolerance)
     R0_given_U(U) = maximum(eigvals(NGM(U)))
-    U_list =  exp.(range(log(0.01), log(1.), length=100))
-    U = U_list[argmin([(R0 - R0_given_U(U))^2 for U ∈ U_list])]
+    U = bisection_search(R0_given_U, R0, 0.01, 1)
 
     # Define infection force λ.
     λ(i, state) = U*(u[i]/N[i]) * sum([(           (state[("I",0,j)] + τ*state[("A",0,j)]) 
