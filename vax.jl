@@ -1,14 +1,15 @@
 #==============================================================================
 This script replicates the TPM SEIR vaccine model.
 
-Sources:
-    https://cpb-ap-se2.wpmucdn.com/blogs.auckland.ac.nz/dist/d/75/files/2017/01/a-covid-19-vaccination-model-for-aotearoa.pdf
-    https://cpb-ap-se2.wpmucdn.com/blogs.auckland.ac.nz/dist/d/75/files/2017/01/a-covid-19-vaccination-model-for-aotearoa-new-zealand-supplementary.pdf
-    https://cpb-ap-se2.wpmucdn.com/blogs.auckland.ac.nz/dist/d/75/files/2017/01/modelling-to-support-a-future-covid-19-strategy-for-aotearoa-new-zealand.pdf
+Tested on Julia 1.6.3.
+Dependencies:
+  CSV v0.9.5
+  DataFrames v1.2.2
+  XLSX v0.7.8
 
 ==============================================================================#
 cd("/Users/wtownsend/Documents/GitHub/replicate_TPM_SEIR/")
-using LinearAlgebra, XLSX
+using LinearAlgebra, XLSX, DataFrames, CSV
 
 
 #==============================================================================
@@ -190,18 +191,69 @@ function total_pop(state)
 end
 @assert all([total_pop(s) for s in values(states)] .≈ N_all)
 
-# Calculate death probability, by vaxed and unvaxed status.
-# Note it's probably worth splitting out children.
-vaxed_pop       = sum([states[1][(c,1,i)]   for c ∈ ["S", "Imm"], i ∈ 1:16])
-unvaxed_pop     = sum([states[1][("S",0,i)] for i ∈ 1:16])
-vaxed_deaths    = sum([states[365][("F",1,i)] for i ∈ 1:16])
-unvaxed_deaths  = sum([states[365][("F",0,i)] for i ∈ 1:16])
-death_prob = (vaxed_deaths + unvaxed_deaths)/(vaxed_pop + unvaxed_pop)
-vaxed_death_prob   = vaxed_deaths/vaxed_pop
-unvaxed_death_prob = unvaxed_deaths/unvaxed_pop
-println("P[death] = $(round(death_prob; digits=7))")
-println("P[death | vax] = $(round(vaxed_death_prob; digits=7))")
-println("P[death | unvax] = $(round(unvaxed_death_prob; digits=7))")
+
+#==============================================================================
+Calculate P[death | vax] for various vax rates.
+==============================================================================#
+
+# This function calculates death probability, by vaxed and unvaxed status.
+# Note we exclude the three age groups with partial or no vax coverage.
+function death_prob(vaxrate12p,   # vaccination rate for those aged 12+
+                    ttiq,         # TTIQ system ∈ ["limited", "full"]
+                    vax_efficacy; # vaccines effectiveness ∈ ["H", "C", "L"]
+                    num_days=1200 # Number of days to run simulation for
+                    )
+    @assert vax_efficacy ∈ ["H", "C", "L"]
+    if vax_efficacy == "H"
+        eI = 0.9
+        eT = 0.5
+        eD = 0.8
+    elseif  vax_efficacy == "C"
+        eI = 0.7
+        eT = 0.5
+        eD = 0.8
+    else
+        eI = 0.5
+        eT = 0.4
+        eD = 0.8
+    end
+    @assert ttiq ∈ ["limited", "full"]
+    if vax_efficacy == "limited"
+        R0 = 6.0*(1-0.17)*(1-0.10)
+    else
+        R0 = 6.0*(1-0.17)*(1-0.20)
+    end
+    states = simulate_SEIR(num_days = num_days,
+                           v = [[0., 0., vaxrate12p*(3/5)]; vaxrate12p*ones(13)],
+                           R0=R0, eI = eI, eT = eT, eD = eD)
+    vaxed_pop       = sum([states[1][(c,1,i)]   for c ∈ ["S", "Imm"], i ∈ 4:16])
+    unvaxed_pop     = sum([states[1][("S",0,i)] for i ∈ 4:16])
+    vaxed_deaths    = sum([states[num_days][("F",1,i)] for i ∈ 4:16])
+    unvaxed_deaths  = sum([states[num_days][("F",0,i)] for i ∈ 4:16])
+    overall_prob = (vaxed_deaths + unvaxed_deaths)/(vaxed_pop + unvaxed_pop)
+    vaxed_prob   = vaxed_deaths/vaxed_pop
+    unvaxed_prob = unvaxed_deaths/unvaxed_pop
+    return (overall_prob, vaxed_prob, unvaxed_prob)
+end
+
+# Calculate probabilities for various specifications, and export.
+df = DataFrame(vaxrate12p = [], ttiq = [], vax_efficacy = [], overall_prob = [],
+               vaxed_prob = [], unvaxed_prob = [])
+for vaxrate12p ∈ 0.8:0.01:0.99
+    for vax_efficacy ∈ ["H", "C", "L"]
+        for ttiq ∈ ["limited", "full"]
+            (overall_prob, vaxed_prob, unvaxed_prob) = death_prob(vaxrate12p,
+                                                        ttiq, vax_efficacy)
+            push!(df, (vaxrate12p, ttiq, vax_efficacy, overall_prob, 
+                       vaxed_prob, unvaxed_prob))
+        end
+    end
+end
+CSV.write("death_probs.csv", df)
+
+
+
+
 
 
 
