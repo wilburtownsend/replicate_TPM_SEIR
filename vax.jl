@@ -14,6 +14,7 @@ using LinearAlgebra, XLSX
 #==============================================================================
 Set various parameters that will be constant across simulations.
 ==============================================================================#
+
 # The size of the full population.
 N_all = 5000000
 # Age-specific populations
@@ -39,7 +40,7 @@ pclin = [0.544, 0.555, 0.577, 0.5985, 0.6195, 0.6395, 0.6585,
 u = [0.462, 0.457, 0.445, 0.558, 0.795, 0.934, 0.974, 0.977,
      0.942, 0.931, 0.942, 0.965, 1.00, 0.977, 0.896, 0.856]
 # Imported cases per age group per day.
-m = age_dist
+m = 1.0 .* age_dist
 
 
 #==============================================================================
@@ -135,16 +136,18 @@ end
 
 
 #==============================================================================
-Try different simulations.
+Try to replicate existing results.
 ==============================================================================#
 
+# Run simulation with default specs.
 states = simulate_SEIR()
 # Count infections + recovered after one year in all groups.
-sum([states[365][("R",v,i)] + states[365][("I",v,i)]
-    for v ∈ 0:1, i ∈ 1:16])
+total_infections = sum([states[365][("R",v,i)] + states[365][("I",v,i)]
+                        for v ∈ 0:1, i ∈ 1:16])
 # Compare to
 #    Table "Baseline public health measures and full TTIQ"
 #       in the more recent paper.
 #    Infections, Cent VE, 90% vaxed over 12
-#    Should be 461893
+println("Total infections were $(round(total_infections; digits=0))")
+println("They should be 461893.")
 
