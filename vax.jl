@@ -218,7 +218,7 @@ function death_prob(vaxrate12p,   # vaccination rate for those aged 12+
         eD = 0.8
     end
     @assert ttiq ∈ ["limited", "full"]
-    if vax_efficacy == "limited"
+    if ttiq == "limited"
         R0 = 6.0*(1-0.17)*(1-0.10)
     else
         R0 = 6.0*(1-0.17)*(1-0.20)
