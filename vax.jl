@@ -7,9 +7,7 @@ Sources:
     https://cpb-ap-se2.wpmucdn.com/blogs.auckland.ac.nz/dist/d/75/files/2017/01/modelling-to-support-a-future-covid-19-strategy-for-aotearoa-new-zealand.pdf
 
 ==============================================================================#
-
-# Main SIR model -- doesn't model hospitalisations and deaths.
-cd("/Users/wtownsend/Documents/GitHub/TPM replication/")
+cd("/Users/wtownsend/Documents/GitHub/replicate_TPM_SEIR/")
 using LinearAlgebra, XLSX
 
 
