@@ -8,7 +8,6 @@ Dependencies:
   XLSX v0.7.8
 
 ==============================================================================#
-cd("/Users/wtownsend/Documents/GitHub/replicate_TPM_SEIR/")
 using LinearAlgebra, XLSX, DataFrames, CSV
 
 
@@ -24,7 +23,8 @@ age_dist = [5.98, 6.39, 6.56, 6.17, 6.59, 7.40,
             5.77, 4.90, 4.24, 6.64]./100
 N = age_dist.*N_all
 # Contact matrix -- from Prem et al
-C_raw = XLSX.readxlsx("MUestimates_all_locations_2.xlsx")["New Zealand"][:]
+C_filepath = joinpath(@__DIR__, "MUestimates_all_locations_2.xlsx")
+C_raw = XLSX.readxlsx(C_filepath)["New Zealand"][:]
 # this makes it balanced.
 C = [(C_raw[i,j] + (N[j]/N[i])*C_raw[j,i])/2 for i ∈ 1:16, j ∈ 1:16]
 # Latent period
