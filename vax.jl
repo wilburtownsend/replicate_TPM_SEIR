@@ -239,7 +239,7 @@ end
 # Calculate probabilities for various specifications, and export.
 df = DataFrame(vaxrate12p = [], ttiq = [], vax_efficacy = [], overall_prob = [],
                vaxed_prob = [], unvaxed_prob = [])
-for vaxrate12p ∈ 0.8:0.01:0.99
+for vaxrate12p ∈ 0.8:0.01:1
     for vax_efficacy ∈ ["H", "C", "L"]
         for ttiq ∈ ["limited", "full"]
             (overall_prob, vaxed_prob, unvaxed_prob) = death_prob(vaxrate12p,
