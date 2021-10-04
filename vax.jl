@@ -9,7 +9,7 @@ include("seir.jl")
 function death_prob(vaxrate12p,   # vaccination rate for those aged 12+
                     ttiq,         # TTIQ system ∈ ["limited", "full"]
                     vax_efficacy; # vaccines effectiveness ∈ ["H", "C", "L"]
-                    num_days=1200 # Number of days to run simulation for
+                    num_days=365  # Number of days to run simulation for
                     )
     eI, eT, eD = vax_efficacy_params(vax_efficacy)
     R0 = R0_under_ttiq(ttiq)
