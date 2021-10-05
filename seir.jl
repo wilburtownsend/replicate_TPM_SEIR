@@ -88,6 +88,19 @@ function R0_under_ttiq(ttiq)
 end
 
 
+"""Returns a vector containing the proportions of each age group that would be
+vaccinated, given an age eligibility settings, either `"5+"` or `"12+"`."""
+function age_group_eligibility(eligible)
+    @assert eligible ∈ ["5+", "12+"]
+    if eligible == "5+"
+        return [[0.]; ones(15)]
+    elseif eligible == "12+"
+        return [[0., 0., 3/5]; ones(13)]
+    end
+end
+
+
+
 #==============================================================================
 Define a function to simulate an SEIR model.
 
