@@ -16,15 +16,6 @@ ttiqs = ["limited", "full"]
 vax_efficacies = ["H", "C", "L"]
 eligibilities = ["12+", "5+"]
 
-function age_group_eligibility(eligible)
-    @assert eligible ∈ ["5+", "12+"]
-    if eligible == "5+"
-        return [[0.]; ones(15)]
-    elseif eligible == "12+"
-        return [[0., 0., 3/5]; ones(13)]
-    end
-end
-
 # lay out in same format as in TPM report
 df = DataFrame(
     infections_H=Float64[], infections_C=Float64[], infections_L=Float64[],
